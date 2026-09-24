@@ -1,0 +1,4 @@
+# Backup / disabled artifacts (runtime trash, not config)
+*.bak-*
+*.disabled-*
+*.removed-*

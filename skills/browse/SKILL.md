@@ -1,0 +1,1 @@
+/home/guihal/.claude/skills/gstack/browse/SKILL.md

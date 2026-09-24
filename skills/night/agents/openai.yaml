@@ -1,0 +1,4 @@
+interface:
+  display_name: "night"
+  short_description: "Codex workflow imported from Claude Code"
+  default_prompt: "Use night for this task."

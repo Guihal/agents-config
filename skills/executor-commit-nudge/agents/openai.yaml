@@ -1,0 +1,4 @@
+interface:
+  display_name: "executor-commit-nudge"
+  short_description: "Codex workflow imported from Claude Code"
+  default_prompt: "Use executor-commit-nudge for this task."

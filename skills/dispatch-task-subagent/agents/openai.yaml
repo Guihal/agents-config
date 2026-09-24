@@ -1,0 +1,4 @@
+interface:
+  display_name: "dispatch-task-subagent"
+  short_description: "Codex workflow imported from Claude Code"
+  default_prompt: "Use dispatch-task-subagent for this task."
