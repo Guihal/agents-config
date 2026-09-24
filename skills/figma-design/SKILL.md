@@ -67,18 +67,15 @@ Do not use it for:
   wants this cycle's verifier workflow;
 - marketing image generation; generic architecture planning.
 
-Source hierarchy for the task (write it down before aesthetic decisions):
-
-1. explicit current user request;
-2. normative product/architecture contracts in the repository (включая
-   requirements-файл проекта, если пользователь его зафиксировал);
-3. existing Figma variables/components/screens (real system, not accidents);
-4. wireframes/provenance artifacts;
-5. external research.
-
-A lower-priority source may fill a gap but may not silently contradict a
-higher-priority one. Mark unresolved contradictions instead of averaging them
-into the design.
+Правила трактовки и авторитетности источников определены глобальным AGENTS.md.
+В BRIEF для существенных решений указать исходные требования и источники,
+определяющие структуру, взаимодействия, визуальный язык, контент и геометрию.
+Один источник может определять несколько свойств. Назначенный пользователем
+референс сохраняет свой статус независимо от того, хранится он в PNG, Figma,
+документе или на сайте. Текущий макет — исходное состояние; его наличие не
+делает его требуемым результатом. Согласованные отступления от референса
+указать отдельно с источником решения. Неразрешённые противоречия источников
+фиксировать явно, не усреднять их в дизайн.
 
 Component-model invariants of this cycle (fail-closed на всех гейтах):
 токены везде (repo DTCG + Figma variables/styles), единая шкала отступов,
@@ -115,6 +112,10 @@ Required sections:
 ## Open questions
 ```
 
+В `Product sources` сохранять исходные пути/node IDs и существенные формулировки
+требований определяющих источников, не ограничиваясь пересказом MAIN. Это
+расширение существующего поля BRIEF, а не новый обязательный документ.
+
 BRIEF говорит, какой результат нужен; не предписывает worker'у пиксельное
 решение. Private acceptance в BRIEF не попадает.
 
@@ -148,7 +149,9 @@ No other payload.
 The researcher returns an evidence report. MAIN validates load-bearing claims,
 then writes canonical CONTEXT (machine-readable explanation of product and
 visual system; node IDs preserved; observed evidence / inference / gaps
-separated). Обязательная секция CONTEXT: **«Spacing scale & kit inventory»** —
+separated). Секция `Visual system evidence` хранит исходные пути/node IDs и
+существенные формулировки требований определяющих источников, не только
+пересказ MAIN. Обязательная секция CONTEXT: **«Spacing scale & kit inventory»** —
 существующая шкала отступов (если есть), покрытие китом (компоненты/сеты/
 инстансы/текст-стили), наличие variables и modes (Desktop/Mobile), вердикт
 «real system vs accidental rectangles». Researcher не блокирует ресерч на
@@ -266,6 +269,28 @@ Create or normalize **MANIFEST** before worker dispatch. Node IDs beat names.
 
 ## 6. Tokens pass — проектные токены (fresh `design-worker`)
 
+Фазы 6–9 задают порядок зависимостей Tokens → Kit → Consumers, а не обязанность
+запускать каждый слой отдельным независимым проходом с полной приёмкой после
+каждого. До изменения используемой переменной/компонента определить затрагиваемых
+потребителей. Проход должен закончиться согласованным состоянием изменённого
+foundation и затронутых экранов/состояний; область проверки включает косвенные
+изменения через masters/variables. Нельзя объявлять проход завершённым, если
+действующие потребители сломаны и их восстановление лишь запланировано на
+следующий цикл. Когда согласованный переход не помещается в текущий безопасный
+проход, использовать явно изолированную staging-версию, не подключённую к
+выдаваемым потребителям, с последующим переключением и очисткой. Это не
+разрешение создавать параллельный production-kit.
+
+Один fresh worker может выполнить последовательные фазы согласованного
+изменения, когда необходимые repo-токены уже подготовлены MAIN (если нет —
+последовательность проходов с сохранением repo-файла MAIN между ними). Сохраняются
+single-writer, запрет worker писать repo-файлы, fresh independent review и
+отсутствие reviewer history в payload. Если worker обнаружил необходимость
+изменить repo-токены, он возвращает предложение MAIN; граница полномочий
+сохраняется. Область затронутых объектов и статус staging вести в существующих
+SPEC/MANIFEST, не создавая отдельную систему управления задачей. Проверять
+потенциально затронутые свойства и потребителей, а не весь файл без причины.
+
 Launch a fresh `design-worker` with exactly:
 
 ```text
@@ -299,8 +324,9 @@ Worker scope (порядок снизу вверх, `ui-kit-contract.md`):
 
 - зона кита: отдельная секция, гуттеры ≥ 200px, RTL-конвенция, protected в
   MANIFEST;
-- `_base`-примитивы → текст-кит (роли display/heading/body/caption/label с
-  отступами роли) → компоненты с variants (реальные оси) и component
+- `_base`-примитивы → текст-кит (роли display/heading/body/caption/label —
+  типографические свойства без дефолтного layout-padding, `ui-kit-contract.md`
+  §3) → компоненты с variants (реальные оси) и component
   properties (TEXT/BOOLEAN/INSTANCE_SWAP) → секции/контейнеры как компоненты;
 - всё в auto-layout, layout-числа — биндинг к spacing-переменным, цвета/
   типографика — к переменным/стилям; нативные COMPONENT/COMPONENT_SET;
@@ -410,8 +436,9 @@ Do not dump internal reviewer history.
 - **Existing kit/DS in the file:** researcher inventories it; worker
   normalizes/extends — never a parallel set beside it. Imported/shared
   library present: use it (search + instantiate + bind), no local duplicates.
-- **No tokens/kit:** mandatory bootstrapping in phases 6–7 BEFORE screens;
-  every gate fail-closes until then.
+- **No tokens/kit:** mandatory bootstrapping in phases 6–7 до итоговых экранов
+  (ограниченное исключение — одноразовый изолированный прототип проверки
+  композиции, `ui-kit-contract.md` §1); every gate fail-closes until then.
 - **Repo has no token file:** worker proposes DTCG content in its report;
   MAIN saves the file and passes the path into SPEC — граница «worker не пишет
   в репо» сохраняется без исключений.
