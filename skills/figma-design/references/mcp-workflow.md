@@ -5,58 +5,91 @@
 управляют файлы figma-design. Причина: harness-lib-документация описывает более
 широкую поверхность тулов, которой в этом окружении физически нет.
 
-## 1. Ровно девять тулов
+## 1. Ровно девятнадцать тулов
 
 Сервер `figma-console` подключён через жёсткий allowlist
-(`~/.zcode/cli/figma-console-tools.txt`). Существует ровно девять вызываемых
-тулов — полный список, не сокращение:
+(`~/.zcode/cli/figma-console-tools.txt`). Существует ровно девятнадцать
+вызываемых тулов — полный список, не сокращение. Все ходят через локальный
+Desktop Bridge (WebSocket); REST-бэкенд Figma (рейт-лимиты) отключён целиком.
 
 | Тул | Класс | Назначение в цикле |
-|---|---|---|
+| --- | --- | --- |
 | `figma_get_status` | read | bridge-соединение, `connectedFile`, живой probe-круг |
 | `figma_list_open_files` | read | какие файлы держат плагин, какой активный таргет |
 | `figma_navigate` | control | переключение/пин активного файла-таргета (`lock`) |
+| `figma_reconnect` | control | принудительный реконнект при протухшем соединении |
+| `figma_diagnose` | read | health-check: плагин/файл/токен; первый шаг при странном поведении |
+| `figma_list_pages` | read | карта страниц файла: id/имя/число топ-левел нод/текущая |
+| `figma_focus_page` | control | переключить редактор на страницу (id из `figma_list_pages` или имя) + zoom |
 | `figma_get_selection` | read | текущее выделение юзера (контекст «куда смотрят») |
 | `figma_execute` | read/write | единственный канал Plugin API (JS). Мутации — только `design-worker` |
 | `figma_capture_screenshot` | read | визуальное доказательство (PNG/JPG/SVG; автокап длинной стороны 1568px) |
+| `figma_get_design_changes` | read | буфер недавних изменений документа (какие ноды/стили менялись) |
 | `figma_lint_design` | read | детерминированный линт фрейма (wcag / design-system / layout / best-practice) |
+| `figma_get_design_system_summary` | read | компактный обзор DS: категории, счётчики, имена коллекций токенов |
+| `figma_search_components` | read | поиск компонентов В ОТКРЫТОМ файле (локальный кэш; см. гард ниже) |
+| `figma_get_component_details` | read | детали компонента: variants, properties, keys |
+| `figma_get_token_values` | read | фактические значения токенов (colors/spacing) |
 | `figjam_get_board_contents` | read | содержимое FigJam-доски (стикеры, фигуры, таблицы, секции) |
 | `figjam_get_connections` | read | граф коннекторов FigJam |
+| `figma_import_image` | write | импорт картинки (локальный `path`/`url`) и image-fill на ноды; base64 через модель запрещён — байты кодирует прокси |
 
 Правила:
 
 - **Любое имя тула вне этой таблицы в данной среде не существует.** Упоминание
   другого figma-тула (в том числе из старых воркфлоу-документов) — ошибка
-  конфигурации/памяти, а не вызываемая возможность. Легаси-суффиксы, которые
-  встречаются в старой документации, но НЕ существуют здесь:
-  `…_take_screenshot`, `…_get_file_data`, `…_get_design_system_kit`,
-  `…_search_components`, `…_audit_*`, `…_check_design_parity`,
-  `…_scan_code_accessibility`, `…_get_console_logs` (в легаси-доках — с
-  префиксом `figma_`). Ни одна роль не должна пытаться их вызвать; отсутствие
-  этих имён — не деградация, а форма этого окружения.
+  конфигурации/памяти, а не вызываемая возможность. REST-тулы бриджа
+  (`…_get_file_data`, `…_get_variables`, `…_get_component`, `…_get_styles`,
+  `…_get_component_image`, `…_get_component_for_development`,
+  `…_get_file_for_plugin`, `…_take_screenshot`, `…_get_design_system_kit`,
+  `…_get_library_components`, `…_get_library_component_by_key`,
+  versions/comments/parity-тулы) отключены политикой: их бэкенд — тот же
+  рейт-лимитный Figma API, что и у дефолтного Figma MCP. Отсутствие этих имён —
+  не деградация, а форма этого окружения; ни одна роль не должна пытаться их
+  вызвать.
+- `figma_search_components` ищет только по открытому файлу. Параметры
+  `libraryFileKey`/`libraryFileUrl` (кросс-файловый поиск по опубликованной
+  библиотеке — REST) прокси отвергает policy-error'ом: это не сбой, повторить
+  без них.
+- `figma_list_pages`/`figma_focus_page` — синтетические тулы прокси-фильтра,
+  реализованы поверх bridge-local `figma_execute` (раздел 3): те же требования
+  к живому соединению плагина.
 - Feature-detect на рантайме остаётся обязательным для **Plugin API внутри
   `figma_execute`** (раздел 4), а не для набора тулов: набор тулов фиксирован
   таблицей выше.
-- Классификация side-effects: мутацию документа выражает только
-  `figma_execute` (и только у `design-worker` по семантическому правилу
-  single-writer). Все остальные восемь тулов — только чтение/навигация.
+- Классификация side-effects: мутацию документа выражают `figma_execute` и
+  `figma_import_image` (обе — только у `design-worker` по семантическому
+  правилу single-writer). `figma_navigate`/`figma_focus_page` — навигация
+  (меняют таргет/вьюпорт, не документ). Остальные тулы — только чтение.
 
-## 2. Идентичность файла и активный таргет
+## 2. Идентичность файла, страницы и активный таргет
 
 1. `figma_get_status` — bridge подключён, прочитать `connectedFile`
    (файл-ключ/имя). Порт и номер соединения не являются идентичностью:
    доверять `connectedFile`.
 2. `figma_list_open_files` — убедиться, что целевой файл открыт плагином;
    при нескольких файлах — какой из них active target.
-3. `figma_navigate` — переключить/зафиксировать таргет. При параллельной работе
+3. `figma_list_pages` — карта страниц целевого файла: id, имена, число
+   топ-левел нод, текущая страница. Первый шаг ориентации «где что лежит»:
+   где живёт кит/экраны/секции, сколько страниц, на какой странице работа.
+   `pageId` отсюда идёт в MANIFEST и в `figma_focus_page`.
+4. `figma_navigate` — переключить/зафиксировать таргет. При параллельной работе
    (агент правит один файл, юзер работает в другом) — пиновать целевой файл
    (`lock: true`); при завершении — отпустить.
-4. `figma_execute` в Local Mode принимает `fileKey` — выполнять код в конкретном
-   подключённом файле без смены активного таргета. В Cloud Mode параметр
+5. `figma_focus_page` — переключить редактор на целевую страницу (по `pageId`
+   из `figma_list_pages`, точнее чем по имени) с zoom в контент. Меняет
+   вьюпорт юзера: при параллельной работе юзера в том же файле prefer чтение
+   узлов без смены страницы (п. 6), а переключение — перед мутациями/скриншотами
+   целевой страницы.
+6. `figma_execute` в Local Mode принимает `fileKey` — выполнять код в конкретном
+   подключенном файле без смены активного таргета. В Cloud Mode параметр
    отвергается (режим парный к одному плагину). Не полагаться на «активный
    файл по умолчанию» при мультифайловой работе: либо `fileKey`, либо явный
-   `figma_navigate`.
-5. Идентичность сверяется с MANIFEST (`figma.fileKey`) до любого чтения, на
+   `figma_navigate`. Узлы другой страницы читаются через
+   `await figma.getNodeByIdAsync(id)` без смены страницы; мутации узлов
+   другой страницы — только после переключения (п. 7 или
+   `setCurrentPageAsync` внутри execute, раздел 3).
+7. Идентичность сверяется с MANIFEST (`figma.fileKey`) до любого чтения, на
    которое опирается решение, и до любой мутации. Расхождение — стоп, а не
    «пишем, куда открыто».
 
@@ -84,7 +117,15 @@ const nodes = figma.root.findAllWithCriteria({
 
 - обходы поддеревьев — `findAll`/`findAllWithCriteria` на конкретном узле, а
   не по всему файлу, когда вопроса по файлу целиком нет;
-- страницы при необходимости — `await figma.getPageByIdAsync(id)`.
+- **`figma.pages` не существует** в этом рантайме (проверено живой пробой) —
+  перечень страниц только `figma.root.children`, текущая страница —
+  `figma.currentPage` (чтение работает);
+- **переключение страницы — только `await figma.setCurrentPageAsync(page)`.**
+  Прямое присваивание `figma.currentPage = page` падает с
+  «Cannot call with documentAccess: dynamic-page». Для смены страницы вне
+  кода использовать тул `figma_focus_page`;
+- чтение узла другой страницы — `await figma.getNodeByIdAsync(id)` без смены
+  страницы; страницы при необходимости — `await figma.getPageByIdAsync(id)`.
 
 Рецепты в `geometry-gates.md` написаны в этой дисциплине. Перед первым
 исполнением на живом файле — capability-проба (раздел 5): один дешёвый
@@ -123,14 +164,21 @@ MCP allowlist не расширять без отдельной необходи
 непроверенной критической зависимости. Нового полного линта после
 присваивания каждого свойства не требуется.
 
-## 5. Bridge-ретраи и capability-проба
+## 5. Bridge-ретраи, диагностика и capability-проба
 
 - Bridge (пере)подключается асинхронно: сразу после старта Figma/плагина/MCP
   первый `figma_get_status` часто ещё «not connected». Ретраи ограниченно:
   3–5 попыток с паузой ~3s; только после этого фиксировать preflight-отказ и
   сообщать его конкретно (эскалация: плагин надо запустить вручную в Figma).
+- Странное поведение тулов (тихие пустые ответы, рассинхрон состояния) —
+  первый шаг `figma_diagnose` (читаемый health-check: плагин/файл/токен,
+  самодиагностика сервера), затем `figma_reconnect` при протухшем соединении;
+  после реконнекта — заново сверить идентичность (раздел 2, п. 1–2).
 - Несколько устаревших инстансов сервера могут занимать порты; активное
   соединение может висеть на фолбэк-порту. Доверять `connectedFile`, не порту.
+- Синтетические `figma_list_pages`/`figma_focus_page` идут через
+  `figma_execute` — требуют живого соединения плагина; их отказ = отказ
+  execute-канала, смотреть diagnose.
 - Capability-проба перед первым `figma_execute` сессии — один read-only вызов,
   например: разрешить `figma.getNodeByIdAsync`, взять один узел, вернуть
   `{id, type}`. Если используемый API отсутствует — не падать молча: заменить
@@ -138,22 +186,27 @@ MCP allowlist не расширять без отдельной необходи
   ограничение в отчёте. Ничего не «считать пройденным» на недоступном методе:
   load-bearing и непроверяемое = `unverifiable`.
 
-## 6. Роль → тула: матрица
+## 6. Роль → тул: матрица
 
-Матрица строится только из девяти реальных тулов. Семантический single-writer:
-мутации выражает `figma_execute`, и его пишущая часть разрешена только роли
-`design-worker`; остальные роли — read-only инспекторы (нет технической
-изоляции — изоляция в промптах, пейлоадах и независимой проверке).
+Матрица строится только из девятнадцати реальных тулов. Семантический
+single-writer: мутации выражают `figma_execute` и `figma_import_image`, их
+пишущая часть разрешена только роли `design-worker`; остальные роли —
+read-only инспекторы (нет технической изоляции — изоляция в промптах,
+пейлоадах и независимой проверке).
 
 | Класс проверки | Инструмент | Кто обязан |
-|---|---|---|
+| --- | --- | --- |
 | Соединение/идентичность | `figma_get_status` (probe), `figma_list_open_files`, `figma_navigate` | все роли, каждая сессия |
+| Здоровье bridge при странностях | `figma_diagnose`, `figma_reconnect` (после — повторная сверка идентичности) | все роли |
+| Ориентация по страницам | `figma_list_pages` (карта), `figma_focus_page` (переход к целевой странице) | researcher — карта файла; worker — перед мутациями/скриншотами на другой странице; рецензенты — по необходимости |
 | Выделение юзера | `figma_get_selection` | researcher (контекст), worker |
+| Обзор дизайн-системы | `figma_get_design_system_summary` → `figma_search_components` → `figma_get_component_details` / `figma_get_token_values` (локальный кэш; компактная альтернатива execute-обходам, не замена геометрическим рецептам) | researcher (inventory), worker (поиск кита для reuse), critic/verifier (DS-факты) |
+| Свежесть/объём изменений | `figma_get_design_changes` (буфер: какие ноды/стили менялись) | worker self-check после мутаций; critic/verifier — что реально менялось в файле |
 | Структура/геометрия/биндинги | `figma_execute` (read-only, рецепты `geometry-gates.md`) | researcher, worker self-check, critic, verifier |
 | Свежая визуальная улика | `figma_capture_screenshot` (секция + фрейм + крупный план, осмотр в читаемом масштабе) | worker self-check, critic, verifier, validator — каждый сам |
 | Детерминированный линт | `figma_lint_design` на каждом затронутом фрейме (группы design-system + layout обязательны; wcag/best-practice — по capability-use policy) | worker self-check, critic, verifier |
 | FigJam-контекст брифа | `figjam_get_board_contents`, `figjam_get_connections` | researcher, когда BRIEF указывает FigJam-доску |
-| Мутации | `figma_execute` (write) | только `design-worker` |
+| Мутации | `figma_execute` (write), `figma_import_image` (image fills) | только `design-worker` |
 
 Правила улик:
 

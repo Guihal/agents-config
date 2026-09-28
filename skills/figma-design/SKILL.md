@@ -53,7 +53,8 @@ Read these references before the first dispatch (они же — шаг 0 каж
 harness-lib `design-standard.md` / `figma-console-workflow.md`, управляют
 файлы figma-design. Известные точки конфликта уже разрешены в них:
 overflow — гейт (не «техника чтения»), шкала отступов обязательна, два
-разрешения обязательны, набор тулов — ровно 9 из allowlist.
+разрешения обязательны, набор тулов — ровно 19 из allowlist
+(`mcp-workflow.md` §1; все bridge-local, REST Figma отключён).
 
 ## 0. Применимость и иерархия источников
 
@@ -128,13 +129,18 @@ Before any dispatch (детали — `mcp-workflow.md` §2, §5):
 - `figma_list_open_files` / `figma_navigate` — целевой файл открыт и является
   активным таргетом (при параллельной работе юзера — `lock`);
 - identity: `connectedFile` == fileKey/url из BRIEF; расхождение — стоп;
+- `figma_list_pages` — карта страниц (id/имя/число нод/текущая): где кит,
+  экраны, секции; `pageId` — в MANIFEST, навигация — `figma_focus_page`
+  (`mcp-workflow.md` §2);
 - capability-проба: один дешёвый read-only `figma_execute`
   (`getNodeByIdAsync` на известном узле) подтверждает async-API;
-- набор тулов фиксирован (9 из allowlist) — не «проверять» несуществующие;
-- для мутационных задач writing-поверхность (`figma_execute`) есть — иначе
-  STOP до любой мутации; технической write-изоляции ролей нет — изоляция
-  семантическая (промпты + пейлоады + независимая проверка), не описывать её
-  как механическую.
+- набор тулов фиксирован (19 из allowlist, `mcp-workflow.md` §1) — не
+  «проверять» несуществующие; REST-тулы и `libraryFileKey` у search —
+  policy-error, это форма окружения, не сбой;
+- для мутационных задач writing-поверхность (`figma_execute`;
+  `figma_import_image` для image fills) есть — иначе STOP до любой мутации;
+  технической write-изоляции ролей нет — изоляция семантическая (промпты +
+  пейлоады + независимая проверка), не описывать её как механическую.
 
 ## 3. Dispatch `design-researcher` → CONTEXT
 
@@ -433,9 +439,13 @@ Do not dump internal reviewer history.
 - **Bridge disconnected:** no mutation. Bounded short retries first; only
   then report the concrete preflight failure.
 - **Target file ambiguity:** do not write until file identity is resolved.
-- **Existing kit/DS in the file:** researcher inventories it; worker
-  normalizes/extends — never a parallel set beside it. Imported/shared
-  library present: use it (search + instantiate + bind), no local duplicates.
+- **Existing kit/DS in the file:** researcher inventories it (`figma_get_design_system_summary`
+  → `figma_search_components` → `figma_get_component_details`, плюс execute-обход);
+  worker normalizes/extends — never a parallel set beside it. Imported/shared
+  library present: use it (search по открытому файлу + instantiate + bind
+  через execute), no local duplicates; компоненты опубликованных библиотек
+  через REST недоступны (policy) — при необходимости фиксировать gap, не
+  дублировать локально без решения MAIN.
 - **No tokens/kit:** mandatory bootstrapping in phases 6–7 до итоговых экранов
   (ограниченное исключение — одноразовый изолированный прототип проверки
   композиции, `ui-kit-contract.md` §1); every gate fail-closes until then.
