@@ -383,7 +383,7 @@ marginTop), подтверждение (какой тул, что показал
 | web-inspector MCP | layout-audit (этот скилл) | поблочный структурный/геометрический аудит живой страницы: перекрытия, клиппинг, видимость, скролл, нод-проход, ≥3 разрешения |
 | playwright MCP | ui-audit | axe-core WCAG 2.1 AA + layout-снифф целой страницы, JSON-репорт |
 | playwright/browser-use | web-gui-tester | интерактивные GUI-флоу-тесты (клики/ввод/сценарии) |
-| figma-console | figma-design | борд-референс ожидаемых блоков (ступень 1 приёмки) |
+| figma-bridge | figma-design | борд-референс ожидаемых блоков (ступень 1 приёмки) |
 | node-repl/IAB | control-browser | другой тулчейн, вне этого скилла |
 | lost-pixel | lost-pixel | pixel-diff против baseline; комплементарен |
 

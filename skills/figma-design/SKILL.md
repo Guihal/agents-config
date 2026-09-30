@@ -1,7 +1,7 @@
 ---
 name: figma-design
 description: >
-  Дизайн или достройка UI в Figma через figma-console MCP по официальным
+  Дизайн или достройка UI в Figma через figma-bridge MCP по официальным
   гайдам Figma и компонентной модели «как в вёрстке»: проектные токены
   (DTCG-файл в репо + variables с modes Desktop/Mobile), единая шкала
   отступов, UI-кит (_base-примитивы, компоненты с variants, секции/
@@ -53,13 +53,13 @@ Read these references before the first dispatch (они же — шаг 0 каж
 harness-lib `design-standard.md` / `figma-console-workflow.md`, управляют
 файлы figma-design. Известные точки конфликта уже разрешены в них:
 overflow — гейт (не «техника чтения»), шкала отступов обязательна, два
-разрешения обязательны, набор тулов — ровно 19 из allowlist
+разрешения обязательны, набор тулов — ровно 19 регистраций Bridge
 (`mcp-workflow.md` §1; все bridge-local, REST Figma отключён).
 
 ## 0. Применимость и иерархия источников
 
 Use this skill when the desired output is native Figma design/design-system
-work through the figma-console MCP.
+work through the figma-bridge MCP.
 
 Do not use it for:
 
@@ -128,15 +128,14 @@ Before any dispatch (детали — `mcp-workflow.md` §2, §5):
   bounded-ретраи (3–5 × ~3s), только потом фиксировать отказ;
 - `figma_list_open_files` / `figma_navigate` — целевой файл открыт и является
   активным таргетом (при параллельной работе юзера — `lock`);
-- identity: `connectedFile` == fileKey/url из BRIEF; расхождение — стоп;
+- identity: `files[].fileKey / live probe` == fileKey/url из BRIEF; расхождение — стоп;
 - `figma_list_pages` — карта страниц (id/имя/число нод/текущая): где кит,
   экраны, секции; `pageId` — в MANIFEST, навигация — `figma_focus_page`
   (`mcp-workflow.md` §2);
 - capability-проба: один дешёвый read-only `figma_execute`
   (`getNodeByIdAsync` на известном узле) подтверждает async-API;
-- набор тулов фиксирован (19 из allowlist, `mcp-workflow.md` §1) — не
-  «проверять» несуществующие; REST-тулы и `libraryFileKey` у search —
-  policy-error, это форма окружения, не сбой;
+- набор тулов фиксирован (19 регистраций Bridge, `mcp-workflow.md` §1) — не
+  «проверять» несуществующие; REST-тулов нет; `libraryFileKey` у search отклоняется схемой до старта Bridge, это форма окружения, не сбой;
 - для мутационных задач writing-поверхность (`figma_execute`;
   `figma_import_image` для image fills) есть — иначе STOP до любой мутации;
   технической write-изоляции ролей нет — изоляция семантическая (промпты +
